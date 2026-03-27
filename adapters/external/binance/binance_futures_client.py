@@ -42,6 +42,13 @@ class BinanceFuturesClient:
         payload = await asyncio.to_thread(self._client.futures_mark_price, symbol=str(symbol).upper())
         return float(payload["markPrice"])
 
+    async def get_min_notional(self, symbol: str) -> float:
+        """
+        Get the minimum notional required by Binance for a symbol.
+        """
+        filters = await self._get_symbol_filters(symbol)
+        return float(filters["min_notional"])
+
     async def change_leverage(self, symbol: str, leverage: int) -> dict[str, Any]:
         """
         Set leverage for a symbol.
@@ -132,28 +139,47 @@ class BinanceFuturesClient:
         price: float,
     ) -> float:
         """
-        Convert quote notional in USD into normalized MARKET order quantity.
+        Convert quote notional in USD into normalized order quantity.
+
+        This method validates both quantity rules and notional rules before the
+        order is sent to Binance, so deterministic exchange rejections can be
+        prevented earlier.
         """
-        raw_qty = float(quote_size_usd) / float(price)
         filters = await self._get_symbol_filters(symbol)
 
         step_size = Decimal(str(filters["step_size"]))
         min_qty = Decimal(str(filters["min_qty"]))
-        max_qty = Decimal(str(filters["max_qty"]))
+        max_qty = Decimal(str(filters["max_qty"])) if filters["max_qty"] is not None else None
+        min_notional = float(filters["min_notional"])
 
-        qty = Decimal(str(raw_qty))
-        normalized = (qty / step_size).to_integral_value(rounding=ROUND_DOWN) * step_size
+        raw_qty = Decimal(str(float(quote_size_usd) / float(price)))
+        normalized = (raw_qty / step_size).to_integral_value(rounding=ROUND_DOWN) * step_size
 
         if normalized < min_qty:
-            raise ValueError("normalized quantity is below exchange minimum quantity")
-        if normalized > max_qty:
-            raise ValueError("normalized quantity is above exchange maximum quantity")
+            raise ValueError(
+                f"normalized quantity is below exchange minimum quantity for {str(symbol).upper()}: "
+                f"requires >= {min_qty}, got {normalized}"
+            )
+
+        if max_qty is not None and normalized > max_qty:
+            raise ValueError(
+                f"normalized quantity is above exchange maximum quantity for {str(symbol).upper()}: "
+                f"requires <= {max_qty}, got {normalized}"
+            )
+
+        normalized_notional = float(normalized) * float(price)
+        if min_notional > 0.0 and normalized_notional < min_notional:
+            raise ValueError(
+                f"normalized order notional below exchange minimum for {str(symbol).upper()}: "
+                f"requires >= {min_notional:.8f}, got {normalized_notional:.8f}. "
+                f"Increase execution profile quote_size_usd."
+            )
 
         return float(normalized)
 
     async def _get_symbol_filters(self, symbol: str) -> dict[str, Any]:
         """
-        Read and cache exchange filters needed for MARKET quantity normalization.
+        Read and cache exchange filters needed for quantity normalization.
         """
         normalized_symbol = str(symbol).upper()
         if normalized_symbol in self._exchange_info_cache:
@@ -168,22 +194,42 @@ class BinanceFuturesClient:
 
             market_lot_size = None
             lot_size = None
+            min_notional: Optional[float] = None
 
             for f in item.get("filters", []):
                 filter_type = str(f.get("filterType", "")).upper()
+
                 if filter_type == "MARKET_LOT_SIZE":
                     market_lot_size = f
-                elif filter_type == "LOT_SIZE":
-                    lot_size = f
+                    continue
 
-            selected = market_lot_size or lot_size
-            if not selected:
-                raise RuntimeError(f"quantity filter not found for symbol {normalized_symbol}")
+                if filter_type == "LOT_SIZE":
+                    lot_size = f
+                    continue
+
+                if filter_type in {"MIN_NOTIONAL", "NOTIONAL"}:
+                    candidate = f.get("notional")
+                    if candidate is None:
+                        candidate = f.get("minNotional")
+                    if candidate is not None:
+                        min_notional = float(candidate)
+
+            chosen_lot = market_lot_size or lot_size
+            if not chosen_lot:
+                raise RuntimeError(f"LOT_SIZE filter not found for symbol {normalized_symbol}")
+
+            if min_notional is None:
+                min_notional = float(getattr(settings, "BINANCE_FUTURES_DEFAULT_MIN_NOTIONAL", 100.0) or 100.0)
 
             out = {
-                "step_size": float(selected["stepSize"]),
-                "min_qty": float(selected["minQty"]),
-                "max_qty": float(selected["maxQty"]),
+                "step_size": float(chosen_lot["stepSize"]),
+                "min_qty": float(chosen_lot["minQty"]),
+                "max_qty": (
+                    float(chosen_lot["maxQty"])
+                    if chosen_lot.get("maxQty") not in (None, "", "0")
+                    else None
+                ),
+                "min_notional": float(min_notional),
             }
             self._exchange_info_cache[normalized_symbol] = out
             return out

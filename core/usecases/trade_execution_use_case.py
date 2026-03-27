@@ -59,12 +59,23 @@ class TradeExecutionUseCase:
     ) -> ExecutionProfileEntity:
         """
         Upsert an execution profile document.
+
+        The profile is validated against Binance symbol rules before it is saved,
+        which avoids deterministic runtime failures later.
         """
+        normalized_symbol = str(symbol).strip().upper()
+        normalized_quote_size_usd = float(quote_size_usd)
+
+        await self._validate_profile_quote_size(
+            symbol=normalized_symbol,
+            quote_size_usd=normalized_quote_size_usd,
+        )
+
         entity = ExecutionProfileEntity(
             execution_account_id=str(execution_account_id).strip(),
-            symbol=str(symbol).strip().upper(),
+            symbol=normalized_symbol,
             is_enabled=bool(is_enabled),
-            quote_size_usd=float(quote_size_usd),
+            quote_size_usd=normalized_quote_size_usd,
             leverage=int(leverage),
         )
         return await self._profile_repo.upsert(entity)
@@ -134,14 +145,14 @@ class TradeExecutionUseCase:
                 }
             raise ValueError("active position exists with different side")
 
-        await self._binance.change_leverage(symbol=symbol, leverage=profile.leverage)
-
         current_price = await self._binance.get_symbol_price(symbol=symbol)
         quantity = await self._binance.normalize_quantity_from_quote_usd(
             symbol=symbol,
             quote_size_usd=profile.quote_size_usd,
             price=current_price,
         )
+
+        await self._binance.change_leverage(symbol=symbol, leverage=profile.leverage)
 
         raw_order = await self._binance.open_market_position(
             symbol=symbol,
@@ -302,6 +313,34 @@ class TradeExecutionUseCase:
         List order history for one strategy.
         """
         return await self._order_repo.list_by_strategy_id(strategy_id=strategy_id, limit=int(limit))
+
+    async def _validate_profile_quote_size(
+        self,
+        *,
+        symbol: str,
+        quote_size_usd: float,
+    ) -> None:
+        """
+        Validate that the configured execution size is acceptable for Binance.
+
+        This prevents saving profiles that are guaranteed to fail later.
+        """
+        if float(quote_size_usd) <= 0.0:
+            raise ValueError("quote_size_usd must be greater than zero")
+
+        min_notional = await self._binance.get_min_notional(symbol=symbol)
+        if min_notional > 0.0 and float(quote_size_usd) < float(min_notional):
+            raise ValueError(
+                f"quote_size_usd below exchange minimum notional for {str(symbol).upper()}: "
+                f"requires >= {float(min_notional):.8f}, got {float(quote_size_usd):.8f}"
+            )
+
+        current_price = await self._binance.get_symbol_price(symbol=symbol)
+        await self._binance.normalize_quantity_from_quote_usd(
+            symbol=symbol,
+            quote_size_usd=float(quote_size_usd),
+            price=float(current_price),
+        )
 
     def _now(self) -> tuple[int, str]:
         """
