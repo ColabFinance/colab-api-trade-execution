@@ -1,7 +1,7 @@
-fastapi
-uvicorn[standard]
-motor
-pymongo
-python-dotenv
-pydantic
-python-binance
+fastapi==0.135.2
+uvicorn[standard]==0.42.0
+motor==3.7.1
+pymongo==4.16.0
+python-dotenv==1.2.2
+pydantic==2.12.5
+python_binance==1.0.36
