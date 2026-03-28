@@ -57,6 +57,7 @@ async def open_trade_position(
             signal_type=body.signal_type,
             idempotency_key=body.idempotency_key,
         )
+        print("\n open result",result)
         return TradeExecutionResponseDTO(**result)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -86,6 +87,7 @@ async def close_trade_position(
             signal_ts=body.signal_ts,
             idempotency_key=body.idempotency_key,
         )
+        print("\n close result",result)
         return TradeExecutionResponseDTO(**result)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

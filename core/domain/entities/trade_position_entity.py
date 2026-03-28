@@ -36,6 +36,10 @@ class TradePositionEntity(MongoEntity):
 
     opened_at: int
     opened_at_iso: Optional[str] = None
+
+    closed_at: Optional[int] = None
+    closed_at_iso: Optional[str] = None
+
     exit_price: Optional[float] = None
 
     model_config = ConfigDict(extra="ignore")
