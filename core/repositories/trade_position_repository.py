@@ -14,13 +14,13 @@ class TradePositionRepository(Protocol):
         """
         Ensure required indexes exist.
         """
-        ...
+        raise NotImplementedError
 
     async def upsert_open(self, entity: TradePositionEntity) -> TradePositionEntity:
         """
         Upsert an open position document.
         """
-        ...
+        raise NotImplementedError
 
     async def get_active_by_strategy(
         self,
@@ -31,7 +31,7 @@ class TradePositionRepository(Protocol):
         """
         Fetch the active position for one strategy/account/symbol combination.
         """
-        ...
+        raise NotImplementedError
 
     async def mark_closed(
         self,
@@ -47,7 +47,7 @@ class TradePositionRepository(Protocol):
         """
         Mark a position as closed.
         """
-        ...
+        raise NotImplementedError
 
     async def list_active(
         self,
@@ -56,4 +56,4 @@ class TradePositionRepository(Protocol):
         """
         List active positions.
         """
-        ...
+        raise NotImplementedError

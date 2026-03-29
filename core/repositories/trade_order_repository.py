@@ -14,22 +14,22 @@ class TradeOrderRepository(Protocol):
         """
         Ensure required indexes exist.
         """
-        ...
+        raise NotImplementedError
 
     async def insert(self, entity: TradeOrderEntity) -> TradeOrderEntity:
         """
         Insert an order document.
         """
-        ...
+        raise NotImplementedError
 
     async def get_by_idempotency_key(self, idempotency_key: str) -> Optional[TradeOrderEntity]:
         """
         Fetch an order by idempotency key.
         """
-        ...
+        raise NotImplementedError
 
     async def list_by_strategy_id(self, strategy_id: str, limit: int) -> List[TradeOrderEntity]:
         """
         List orders for one strategy.
         """
-        ...
+        raise NotImplementedError

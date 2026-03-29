@@ -14,13 +14,13 @@ class ExecutionProfileRepository(Protocol):
         """
         Ensure required indexes exist.
         """
-        ...
+        raise NotImplementedError
 
     async def upsert(self, entity: ExecutionProfileEntity) -> ExecutionProfileEntity:
         """
         Upsert an execution profile.
         """
-        ...
+        raise NotImplementedError
 
     async def get_by_account_symbol(
         self,
@@ -30,7 +30,7 @@ class ExecutionProfileRepository(Protocol):
         """
         Fetch one execution profile by account and symbol.
         """
-        ...
+        raise NotImplementedError
 
     async def list(
         self,
@@ -39,4 +39,4 @@ class ExecutionProfileRepository(Protocol):
         """
         List execution profiles, optionally filtered by account.
         """
-        ...
+        raise NotImplementedError
