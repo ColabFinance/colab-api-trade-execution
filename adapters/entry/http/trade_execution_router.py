@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
 from adapters.entry.http.deps import get_db
@@ -8,6 +8,13 @@ from adapters.entry.http.dtos.trade_execution_dtos import (
     TradeCloseRequestDTO,
     TradeExecutionResponseDTO,
     TradeOpenRequestDTO,
+    TradeOrderListQueryDTO,
+    TradeOrderListResponseDTO,
+    TradeOrderOutDTO,
+    TradePaginationDTO,
+    TradePositionListQueryDTO,
+    TradePositionListResponseDTO,
+    TradePositionOutDTO,
 )
 from adapters.external.database.execution_profile_repository_mongodb import (
     ExecutionProfileRepositoryMongoDB,
@@ -57,7 +64,6 @@ async def open_trade_position(
             signal_type=body.signal_type,
             idempotency_key=body.idempotency_key,
         )
-        print("\n open result",result)
         return TradeExecutionResponseDTO(**result)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -87,7 +93,6 @@ async def close_trade_position(
             signal_ts=body.signal_ts,
             idempotency_key=body.idempotency_key,
         )
-        print("\n close result",result)
         return TradeExecutionResponseDTO(**result)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -95,42 +100,74 @@ async def close_trade_position(
         raise HTTPException(status_code=500, detail=f"Failed to close trade position: {exc}") from exc
 
 
-@router.get("/positions/active", response_model=dict)
+@router.get("/positions/active", response_model=TradePositionListResponseDTO)
 async def list_active_trade_positions(
     request: Request,
-    execution_account_id: str | None = Query(None),
+    query: TradePositionListQueryDTO = Depends(),
     db: AsyncIOMotorDatabase = Depends(get_db),
 ):
     """
-    List active trade positions.
+    List positions with pagination and status scope support.
+
+    The route path is preserved for compatibility.
     """
     try:
         uc = get_use_case(request, db)
         await uc.ensure_indexes()
 
-        items = await uc.list_active_positions(execution_account_id=execution_account_id)
-        data = [item.model_dump() for item in items]
-        return {"ok": True, "message": "ok", "data": data}
+        result = await uc.list_positions_paginated(
+            execution_account_id=query.execution_account_id,
+            status_scope=query.status_scope,
+            limit=int(query.limit),
+            page=query.page,
+            offset=query.offset,
+        )
+        data = [TradePositionOutDTO.model_validate(item.model_dump()) for item in result["items"]]
+        pagination = TradePaginationDTO.model_validate(result["pagination"])
+
+        return TradePositionListResponseDTO(
+            ok=True,
+            message="ok",
+            data=data,
+            pagination=pagination,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Failed to list active positions: {exc}") from exc
+        raise HTTPException(status_code=500, detail=f"Failed to list positions: {exc}") from exc
 
 
-@router.get("/orders", response_model=dict)
+@router.get("/orders", response_model=TradeOrderListResponseDTO)
 async def list_trade_orders_by_strategy(
     request: Request,
-    strategy_id: str = Query(...),
-    limit: int = Query(100, ge=1, le=1000),
+    query: TradeOrderListQueryDTO = Depends(),
     db: AsyncIOMotorDatabase = Depends(get_db),
 ):
     """
-    List trade order history for one strategy.
+    List trade order history with pagination and lifecycle scope support.
     """
     try:
         uc = get_use_case(request, db)
         await uc.ensure_indexes()
 
-        items = await uc.list_orders_by_strategy_id(strategy_id=strategy_id, limit=int(limit))
-        data = [item.model_dump() for item in items]
-        return {"ok": True, "message": "ok", "data": data}
+        result = await uc.list_orders_paginated(
+            strategy_id=query.strategy_id,
+            execution_account_id=query.execution_account_id,
+            lifecycle_scope=query.lifecycle_scope,
+            limit=int(query.limit),
+            page=query.page,
+            offset=query.offset,
+        )
+        data = [TradeOrderOutDTO.model_validate(item.model_dump()) for item in result["items"]]
+        pagination = TradePaginationDTO.model_validate(result["pagination"])
+
+        return TradeOrderListResponseDTO(
+            ok=True,
+            message="ok",
+            data=data,
+            pagination=pagination,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Failed to list trade orders: {exc}") from exc

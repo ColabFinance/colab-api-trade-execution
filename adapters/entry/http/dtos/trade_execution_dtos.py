@@ -141,3 +141,150 @@ class TradeExecutionResponseDTO(BaseModel):
     reason: Optional[str] = None
     order: Optional[dict] = None
     position: Optional[dict] = None
+
+
+class TradePositionListQueryDTO(BaseModel):
+    """
+    DTO for listing positions with filters and pagination.
+    """
+
+    execution_account_id: Optional[str] = None
+    status_scope: str = "OPEN"
+    limit: int = Field(default=10, ge=1, le=1000)
+    page: Optional[int] = Field(default=None, ge=1)
+    offset: Optional[int] = Field(default=None, ge=0)
+
+    @field_validator("execution_account_id")
+    @classmethod
+    def _strip_optional_execution_account_id(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return None
+        value = str(v).strip()
+        return value or None
+
+    @field_validator("status_scope")
+    @classmethod
+    def _normalize_status_scope(cls, v: str) -> str:
+        normalized = str(v or "OPEN").strip().upper()
+        if normalized not in {"ALL", "OPEN", "CLOSED"}:
+            raise ValueError("status_scope must be ALL, OPEN or CLOSED")
+        return normalized
+
+
+class TradeOrderListQueryDTO(BaseModel):
+    """
+    DTO for listing orders with filters and pagination.
+    """
+
+    strategy_id: Optional[str] = None
+    execution_account_id: Optional[str] = None
+    lifecycle_scope: str = "ALL"
+    limit: int = Field(default=10, ge=1, le=1000)
+    page: Optional[int] = Field(default=None, ge=1)
+    offset: Optional[int] = Field(default=None, ge=0)
+
+    @field_validator("strategy_id", "execution_account_id")
+    @classmethod
+    def _strip_optional_strings(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return None
+        value = str(v).strip()
+        return value or None
+
+    @field_validator("lifecycle_scope")
+    @classmethod
+    def _normalize_lifecycle_scope(cls, v: str) -> str:
+        normalized = str(v or "ALL").strip().upper()
+        if normalized not in {"ALL", "OPEN", "CLOSED"}:
+            raise ValueError("lifecycle_scope must be ALL, OPEN or CLOSED")
+        return normalized
+
+
+class TradePaginationDTO(BaseModel):
+    """
+    Generic pagination DTO for trade list endpoints.
+    """
+
+    limit: int
+    offset: int
+    page: int
+    total: int
+    has_next: bool
+    has_prev: bool
+
+
+class TradePositionOutDTO(BaseModel):
+    """
+    DTO returned when reading trade positions.
+    """
+
+    id: Optional[str] = None
+    strategy_id: str
+    execution_account_id: str
+    symbol: str
+    position_side: str
+    status: str
+    quantity: float
+    entry_price: float
+    open_order_id: Optional[str] = None
+    close_order_id: Optional[str] = None
+    signal_open_id: Optional[str] = None
+    signal_close_id: Optional[str] = None
+    open_reason: Optional[str] = None
+    close_reason: Optional[str] = None
+    opened_at: int
+    opened_at_iso: Optional[str] = None
+    closed_at: Optional[int] = None
+    closed_at_iso: Optional[str] = None
+    exit_price: Optional[float] = None
+    created_at: Optional[int] = None
+    created_at_iso: Optional[str] = None
+    updated_at: Optional[int] = None
+    updated_at_iso: Optional[str] = None
+
+
+class TradeOrderOutDTO(BaseModel):
+    """
+    DTO returned when reading trade orders.
+    """
+
+    id: Optional[str] = None
+    action: str
+    idempotency_key: str
+    strategy_id: str
+    execution_account_id: str
+    symbol: str
+    position_side: str
+    side: str
+    quantity: float
+    signal_id: Optional[str] = None
+    signal_ts: Optional[int] = None
+    binance_order_id: Optional[str] = None
+    status: str
+    raw_response: Optional[dict] = None
+    created_at: Optional[int] = None
+    created_at_iso: Optional[str] = None
+    updated_at: Optional[int] = None
+    updated_at_iso: Optional[str] = None
+
+
+class TradePositionListResponseDTO(BaseModel):
+    """
+    Response DTO for positions listing.
+    """
+
+    ok: bool
+    message: str
+    data: list[TradePositionOutDTO]
+    pagination: TradePaginationDTO
+
+
+class TradeOrderListResponseDTO(BaseModel):
+    """
+    Response DTO for orders listing.
+    """
+
+    ok: bool
+    message: str
+    data: list[TradeOrderOutDTO]
+    pagination: TradePaginationDTO

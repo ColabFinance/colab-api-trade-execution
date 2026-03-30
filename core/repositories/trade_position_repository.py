@@ -57,3 +57,27 @@ class TradePositionRepository(Protocol):
         List active positions.
         """
         raise NotImplementedError
+
+    async def list_paginated(
+        self,
+        *,
+        execution_account_id: Optional[str] = None,
+        status_scope: str = "OPEN",
+        limit: int = 10,
+        offset: int = 0,
+    ) -> List[TradePositionEntity]:
+        """
+        List positions with pagination and status scope support.
+        """
+        raise NotImplementedError
+
+    async def count(
+        self,
+        *,
+        execution_account_id: Optional[str] = None,
+        status_scope: str = "OPEN",
+    ) -> int:
+        """
+        Count positions for pagination and status scope support.
+        """
+        raise NotImplementedError

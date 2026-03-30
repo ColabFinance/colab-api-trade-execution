@@ -35,6 +35,26 @@ class TradePositionRepositoryMongoDB(TradePositionRepository):
             name="ix_trade_position_account_status",
         )
 
+    def _build_query(
+        self,
+        *,
+        execution_account_id: Optional[str] = None,
+        status_scope: str = "OPEN",
+    ) -> dict:
+        """
+        Build the query for positions listing endpoints.
+        """
+        query: dict = {}
+
+        normalized_scope = str(status_scope or "OPEN").strip().upper()
+        if normalized_scope != "ALL":
+            query["status"] = normalized_scope
+
+        if execution_account_id:
+            query["execution_account_id"] = str(execution_account_id).strip()
+
+        return query
+
     async def upsert_open(self, entity: TradePositionEntity) -> TradePositionEntity:
         """
         Upsert an open position document by strategy/account/symbol/status.
@@ -117,10 +137,50 @@ class TradePositionRepositoryMongoDB(TradePositionRepository):
         """
         List active positions, optionally filtered by execution account.
         """
-        query: dict = {"status": "OPEN"}
-        if execution_account_id:
-            query["execution_account_id"] = str(execution_account_id).strip()
-
+        query = self._build_query(
+            execution_account_id=execution_account_id,
+            status_scope="OPEN",
+        )
         cursor = self._col.find(query).sort([("opened_at", -1)])
         docs = await cursor.to_list(length=None)
         return [TradePositionEntity.from_mongo(doc) for doc in docs if doc]
+
+    async def list_paginated(
+        self,
+        *,
+        execution_account_id: Optional[str] = None,
+        status_scope: str = "OPEN",
+        limit: int = 10,
+        offset: int = 0,
+    ) -> List[TradePositionEntity]:
+        """
+        List positions with pagination and status scope support.
+        """
+        query = self._build_query(
+            execution_account_id=execution_account_id,
+            status_scope=status_scope,
+        )
+
+        cursor = (
+            self._col.find(query)
+            .sort([("opened_at", -1), ("created_at", -1)])
+            .skip(int(offset))
+            .limit(int(limit))
+        )
+        docs = await cursor.to_list(length=int(limit))
+        return [TradePositionEntity.from_mongo(doc) for doc in docs if doc]
+
+    async def count(
+        self,
+        *,
+        execution_account_id: Optional[str] = None,
+        status_scope: str = "OPEN",
+    ) -> int:
+        """
+        Count positions for pagination and status scope support.
+        """
+        query = self._build_query(
+            execution_account_id=execution_account_id,
+            status_scope=status_scope,
+        )
+        return int(await self._col.count_documents(query))

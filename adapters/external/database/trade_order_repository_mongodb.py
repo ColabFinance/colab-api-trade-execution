@@ -37,8 +37,12 @@ class TradeOrderRepositoryMongoDB(TradeOrderRepository):
             name="ix_trade_order_strategy_created_at",
         )
         await self._col.create_index(
-            [("execution_account_id", 1), ("symbol", 1), ("created_at", -1)],
-            name="ix_trade_order_account_symbol_created_at",
+            [("execution_account_id", 1), ("created_at", -1)],
+            name="ix_trade_order_account_created_at",
+        )
+        await self._col.create_index(
+            [("action", 1), ("created_at", -1)],
+            name="ix_trade_order_action_created_at",
         )
 
     def _now(self) -> tuple[int, str]:
@@ -48,6 +52,29 @@ class TradeOrderRepositoryMongoDB(TradeOrderRepository):
         now_ms = int(time.time() * 1000)
         now_iso = datetime.utcnow().replace(tzinfo=timezone.utc).isoformat().replace("+00:00", "Z")
         return now_ms, now_iso
+
+    def _build_query(
+        self,
+        *,
+        strategy_id: Optional[str] = None,
+        execution_account_id: Optional[str] = None,
+        lifecycle_scope: str = "OPEN",
+    ) -> dict:
+        query: dict = {}
+
+        if strategy_id:
+            query["strategy_id"] = str(strategy_id)
+
+        if execution_account_id:
+            query["execution_account_id"] = str(execution_account_id).strip()
+
+        normalized_scope = str(lifecycle_scope or "OPEN").strip().upper()
+        if normalized_scope == "OPEN":
+            query["action"] = "OPEN"
+        elif normalized_scope == "CLOSED":
+            query["action"] = "CLOSE"
+
+        return query
 
     async def insert(self, entity: TradeOrderEntity) -> TradeOrderEntity:
         """
@@ -71,13 +98,47 @@ class TradeOrderRepositoryMongoDB(TradeOrderRepository):
         return TradeOrderEntity.from_mongo(doc) if doc else None
 
     async def list_by_strategy_id(self, strategy_id: str, limit: int) -> List[TradeOrderEntity]:
-        """
-        List order history for one strategy.
-        """
+        return await self.list_paginated(
+            strategy_id=str(strategy_id),
+            lifecycle_scope="ALL",
+            limit=int(limit),
+            offset=0,
+        )
+
+    async def list_paginated(
+        self,
+        *,
+        strategy_id: Optional[str] = None,
+        execution_account_id: Optional[str] = None,
+        lifecycle_scope: str = "OPEN",
+        limit: int = 10,
+        offset: int = 0,
+    ) -> List[TradeOrderEntity]:
+        query = self._build_query(
+            strategy_id=strategy_id,
+            execution_account_id=execution_account_id,
+            lifecycle_scope=lifecycle_scope,
+        )
+
         cursor = (
-            self._col.find({"strategy_id": str(strategy_id)})
+            self._col.find(query)
             .sort([("created_at", -1)])
+            .skip(int(offset))
             .limit(int(limit))
         )
         docs = await cursor.to_list(length=int(limit))
         return [TradeOrderEntity.from_mongo(doc) for doc in docs if doc]
+
+    async def count(
+        self,
+        *,
+        strategy_id: Optional[str] = None,
+        execution_account_id: Optional[str] = None,
+        lifecycle_scope: str = "OPEN",
+    ) -> int:
+        query = self._build_query(
+            strategy_id=strategy_id,
+            execution_account_id=execution_account_id,
+            lifecycle_scope=lifecycle_scope,
+        )
+        return int(await self._col.count_documents(query))

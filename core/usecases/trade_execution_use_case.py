@@ -304,6 +304,51 @@ class TradeExecutionUseCase:
         """
         return await self._position_repo.list_active(execution_account_id=execution_account_id)
 
+    async def list_positions_paginated(
+        self,
+        *,
+        execution_account_id: Optional[str] = None,
+        status_scope: str = "OPEN",
+        limit: int = 10,
+        page: Optional[int] = None,
+        offset: Optional[int] = None,
+    ) -> dict:
+        normalized_scope = str(status_scope or "OPEN").strip().upper()
+        if normalized_scope not in {"ALL", "OPEN", "CLOSED"}:
+            raise ValueError("status_scope must be ALL, OPEN or CLOSED")
+
+        resolved_limit = int(limit)
+        resolved_offset = int(offset or 0)
+
+        if page is not None:
+            resolved_page = max(1, int(page))
+            resolved_offset = (resolved_page - 1) * resolved_limit
+        else:
+            resolved_page = (resolved_offset // resolved_limit) + 1
+
+        items = await self._position_repo.list_paginated(
+            execution_account_id=execution_account_id,
+            status_scope=normalized_scope,
+            limit=resolved_limit,
+            offset=resolved_offset,
+        )
+        total = await self._position_repo.count(
+            execution_account_id=execution_account_id,
+            status_scope=normalized_scope,
+        )
+
+        return {
+            "items": items,
+            "pagination": {
+                "limit": resolved_limit,
+                "offset": resolved_offset,
+                "page": resolved_page,
+                "total": int(total),
+                "has_next": (resolved_offset + resolved_limit) < int(total),
+                "has_prev": resolved_offset > 0,
+            },
+        }
+
     async def list_orders_by_strategy_id(
         self,
         strategy_id: str,
@@ -313,6 +358,54 @@ class TradeExecutionUseCase:
         List order history for one strategy.
         """
         return await self._order_repo.list_by_strategy_id(strategy_id=strategy_id, limit=int(limit))
+
+    async def list_orders_paginated(
+        self,
+        *,
+        strategy_id: Optional[str] = None,
+        execution_account_id: Optional[str] = None,
+        lifecycle_scope: str = "OPEN",
+        limit: int = 10,
+        page: Optional[int] = None,
+        offset: Optional[int] = None,
+    ) -> dict:
+        normalized_scope = str(lifecycle_scope or "OPEN").strip().upper()
+        if normalized_scope not in {"ALL", "OPEN", "CLOSED"}:
+            raise ValueError("lifecycle_scope must be ALL, OPEN or CLOSED")
+
+        resolved_limit = int(limit)
+        resolved_offset = int(offset or 0)
+
+        if page is not None:
+            resolved_page = max(1, int(page))
+            resolved_offset = (resolved_page - 1) * resolved_limit
+        else:
+            resolved_page = (resolved_offset // resolved_limit) + 1
+
+        items = await self._order_repo.list_paginated(
+            strategy_id=strategy_id,
+            execution_account_id=execution_account_id,
+            lifecycle_scope=normalized_scope,
+            limit=resolved_limit,
+            offset=resolved_offset,
+        )
+        total = await self._order_repo.count(
+            strategy_id=strategy_id,
+            execution_account_id=execution_account_id,
+            lifecycle_scope=normalized_scope,
+        )
+
+        return {
+            "items": items,
+            "pagination": {
+                "limit": resolved_limit,
+                "offset": resolved_offset,
+                "page": resolved_page,
+                "total": int(total),
+                "has_next": (resolved_offset + resolved_limit) < int(total),
+                "has_prev": resolved_offset > 0,
+            },
+        }
 
     async def _validate_profile_quote_size(
         self,
