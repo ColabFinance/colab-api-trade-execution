@@ -1,25 +1,36 @@
-version: "3.9"
-
 services:
-  api-trade-execution:
-    build: .
-    container_name: api-trade-execution
-    ports:
-      - "8002:8002"
-    environment:
-      APP_NAME: api-trade-execution
-      LOG_LEVEL: INFO
-      MONGODB_URI: mongodb://mongo-trade-execution:27017
-      MONGODB_DB_NAME: trade_execution_db
-      BINANCE_API_KEY: ${BINANCE_API_KEY}
-      BINANCE_API_SECRET: ${BINANCE_API_SECRET}
-      BINANCE_TESTNET: ${BINANCE_TESTNET:-false}
-      BINANCE_TLD: ${BINANCE_TLD:-com}
-    depends_on:
-      - mongo-trade-execution
-
   mongo-trade-execution:
-    image: mongo:7
+    image: mongo:6.0
     container_name: mongo-trade-execution
+    restart: always
     ports:
       - "27029:27017"
+    volumes:
+      - ./mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api-trade-execution:
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+    container_name: api-trade-execution
+    restart: always
+    env_file:
+      - .env
+    depends_on:
+      mongo-trade-execution:
+        condition: service_healthy
+    ports:
+      - "8002:8002"
+    volumes:
+      - .:/app:delegated
+    working_dir: /app
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+volumes:
+  mongo_data:
