@@ -1,0 +1,6 @@
+mongo_data
+mongo_data/*
+.git
+.gitignore
+__pycache__
+*.pyc

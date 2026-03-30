@@ -21,6 +21,9 @@ services:
     restart: always
     env_file:
       - .env
+    environment:
+      MONGODB_URI: mongodb://mongo-trade-execution:27017
+      MONGODB_DB_NAME: trade_execution_db
     depends_on:
       mongo-trade-execution:
         condition: service_healthy
