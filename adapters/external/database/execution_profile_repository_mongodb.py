@@ -48,10 +48,24 @@ class ExecutionProfileRepositoryMongoDB(ExecutionProfileRepository):
     async def upsert(self, entity: ExecutionProfileEntity) -> ExecutionProfileEntity:
         """
         Upsert an execution profile document.
+
+        The initial quote is preserved after the first creation.
         """
         now_ms, now_iso = self._now()
 
+        existing = await self.get_by_account_symbol(
+            execution_account_id=entity.execution_account_id,
+            symbol=entity.symbol,
+        )
+
+        initial_quote_size_usd = (
+            float(existing.initial_quote_size_usd)
+            if existing is not None and existing.initial_quote_size_usd is not None
+            else float(entity.initial_quote_size_usd or entity.quote_size_usd)
+        )
+
         payload = entity.to_mongo()
+        payload["initial_quote_size_usd"] = float(initial_quote_size_usd)
         payload["updated_at"] = now_ms
         payload["updated_at_iso"] = now_iso
 
@@ -93,6 +107,41 @@ class ExecutionProfileRepositoryMongoDB(ExecutionProfileRepository):
             }
         )
         return ExecutionProfileEntity.from_mongo(doc) if doc else None
+
+    async def update_quote_size(
+        self,
+        *,
+        execution_account_id: str,
+        symbol: str,
+        quote_size_usd: float,
+    ) -> Optional[ExecutionProfileEntity]:
+        """
+        Update only the active quote size of one execution profile.
+
+        This path is intentionally more permissive than profile creation/update
+        because a dynamic strategy can temporarily shrink below exchange minimum
+        notional after losses.
+        """
+        now_ms, now_iso = self._now()
+
+        await self._col.update_one(
+            {
+                "execution_account_id": str(execution_account_id).strip(),
+                "symbol": str(symbol).strip().upper(),
+            },
+            {
+                "$set": {
+                    "quote_size_usd": float(quote_size_usd),
+                    "updated_at": now_ms,
+                    "updated_at_iso": now_iso,
+                }
+            },
+        )
+
+        return await self.get_by_account_symbol(
+            execution_account_id=execution_account_id,
+            symbol=symbol,
+        )
 
     async def list(
         self,

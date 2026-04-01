@@ -12,13 +12,13 @@ class ExecutionProfileRepository(Protocol):
 
     async def ensure_indexes(self) -> None:
         """
-        Ensure required indexes exist.
+        Ensure repository indexes exist.
         """
         raise NotImplementedError
 
     async def upsert(self, entity: ExecutionProfileEntity) -> ExecutionProfileEntity:
         """
-        Upsert an execution profile.
+        Create or update one execution profile.
         """
         raise NotImplementedError
 
@@ -32,11 +32,23 @@ class ExecutionProfileRepository(Protocol):
         """
         raise NotImplementedError
 
+    async def update_quote_size(
+        self,
+        *,
+        execution_account_id: str,
+        symbol: str,
+        quote_size_usd: float,
+    ) -> Optional[ExecutionProfileEntity]:
+        """
+        Update only the active quote size of one execution profile.
+        """
+        raise NotImplementedError
+
     async def list(
         self,
         execution_account_id: Optional[str] = None,
     ) -> List[ExecutionProfileEntity]:
         """
-        List execution profiles, optionally filtered by account.
+        List execution profiles.
         """
         raise NotImplementedError
