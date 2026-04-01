@@ -6,9 +6,14 @@ from motor.motor_asyncio import AsyncIOMotorDatabase
 from adapters.entry.http.deps import get_db
 from adapters.entry.http.dtos.trade_execution_dtos import (
     ExecutionProfileOutDTO,
+    ExecutionProfileQuoteHistoryOutDTO,
     ExecutionProfileUpsertDTO,
+    TradePaginationDTO,
 )
 from adapters.external.binance.binance_futures_client import BinanceFuturesClient
+from adapters.external.database.execution_profile_quote_history_repository_mongodb import (
+    ExecutionProfileQuoteHistoryRepositoryMongoDB,
+)
 from adapters.external.database.execution_profile_repository_mongodb import (
     ExecutionProfileRepositoryMongoDB,
 )
@@ -28,6 +33,7 @@ def get_use_case(db: AsyncIOMotorDatabase, binance_client: BinanceFuturesClient)
     """
     return TradeExecutionUseCase(
         profile_repo=ExecutionProfileRepositoryMongoDB(db),
+        profile_quote_history_repo=ExecutionProfileQuoteHistoryRepositoryMongoDB(db),
         position_repo=TradePositionRepositoryMongoDB(db),
         order_repo=TradeOrderRepositoryMongoDB(db),
         binance_client=binance_client,
@@ -80,3 +86,46 @@ async def list_execution_profiles(
         return {"ok": True, "message": "ok", "data": data}
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Failed to list execution profiles: {exc}") from exc
+
+
+@router.get("/quote-history", response_model=dict)
+async def list_execution_profile_quote_history(
+    request: Request,
+    execution_account_id: str = Query(..., min_length=1),
+    symbol: str = Query(..., min_length=1),
+    limit: int = Query(20, ge=1, le=5000),
+    page: int | None = Query(None, ge=1),
+    offset: int | None = Query(None, ge=0),
+    db: AsyncIOMotorDatabase = Depends(get_db),
+):
+    """
+    List quote-size change history for one execution profile.
+    """
+    try:
+        uc = get_use_case(db, request.app.state.binance_futures_client)
+        await uc.ensure_indexes()
+
+        result = await uc.list_quote_history_paginated(
+            execution_account_id=execution_account_id,
+            symbol=symbol,
+            limit=int(limit),
+            page=page,
+            offset=offset,
+        )
+
+        data = [
+            ExecutionProfileQuoteHistoryOutDTO.model_validate(item.model_dump())
+            for item in result["items"]
+        ]
+        pagination = TradePaginationDTO.model_validate(result["pagination"])
+
+        return {
+            "ok": True,
+            "message": "ok",
+            "data": data,
+            "pagination": pagination,
+        }
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to list execution profile quote history: {exc}") from exc

@@ -46,7 +46,54 @@ class ExecutionProfileOutDTO(BaseModel):
     symbol: str
     is_enabled: bool
     quote_size_usd: float
+    initial_quote_size_usd: Optional[float] = None
     leverage: int
+    created_at: Optional[int] = None
+    created_at_iso: Optional[str] = None
+    updated_at: Optional[int] = None
+    updated_at_iso: Optional[str] = None
+
+
+class ExecutionProfileQuoteHistoryOutDTO(BaseModel):
+    """
+    DTO returned when reading quote-size change history for one execution profile.
+    """
+
+    id: Optional[str] = None
+
+    execution_account_id: str
+    symbol: str
+    strategy_id: Optional[str] = None
+    position_id: Optional[str] = None
+    close_order_id: Optional[str] = None
+
+    position_side: Optional[str] = None
+    leverage: Optional[int] = None
+
+    initial_quote_size_usd: Optional[float] = None
+    quote_size_before_usd: float
+    quote_size_after_usd: float
+    quote_delta_usd: float
+
+    entry_price: Optional[float] = None
+    exit_price: Optional[float] = None
+    quantity: Optional[float] = None
+
+    realized_gross_pnl_usd: float = 0.0
+    realized_net_pnl_usd: float = 0.0
+
+    fee_open_estimated_usd: float = 0.0
+    fee_close_estimated_usd: float = 0.0
+    fee_total_estimated_usd: float = 0.0
+    taker_fee_rate: float = 0.0
+
+    close_reason: Optional[str] = None
+
+    opened_at: Optional[int] = None
+    opened_at_iso: Optional[str] = None
+    closed_at: Optional[int] = None
+    closed_at_iso: Optional[str] = None
+
     created_at: Optional[int] = None
     created_at_iso: Optional[str] = None
     updated_at: Optional[int] = None
