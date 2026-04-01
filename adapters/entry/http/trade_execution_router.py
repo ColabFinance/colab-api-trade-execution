@@ -16,6 +16,9 @@ from adapters.entry.http.dtos.trade_execution_dtos import (
     TradePositionListResponseDTO,
     TradePositionOutDTO,
 )
+from adapters.external.database.execution_profile_quote_history_repository_mongodb import (
+    ExecutionProfileQuoteHistoryRepositoryMongoDB,
+)
 from adapters.external.database.execution_profile_repository_mongodb import (
     ExecutionProfileRepositoryMongoDB,
 )
@@ -35,6 +38,7 @@ def get_use_case(request: Request, db: AsyncIOMotorDatabase) -> TradeExecutionUs
     """
     return TradeExecutionUseCase(
         profile_repo=ExecutionProfileRepositoryMongoDB(db),
+        profile_quote_history_repo=ExecutionProfileQuoteHistoryRepositoryMongoDB(db),
         position_repo=TradePositionRepositoryMongoDB(db),
         order_repo=TradeOrderRepositoryMongoDB(db),
         binance_client=request.app.state.binance_futures_client,
@@ -102,7 +106,6 @@ async def close_trade_position(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Failed to close trade position: {exc}") from exc
-
 
 @router.get("/positions/active", response_model=TradePositionListResponseDTO)
 async def list_active_trade_positions(
